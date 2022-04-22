@@ -8,18 +8,11 @@ validators.validate = (validationArray) => async (req, res, next) => {
   const errors = validationResult(req);
   if (errors.isEmpty()) return next();
 
-  const extractedErrors = [];
-  errors
+  const message = errors
     .array()
-    .map((error) => extractedErrors.push({ [error.param]: error.msg }));
-  return sendResponse(
-    res,
-    422,
-    false,
-    null,
-    extractedErrors,
-    "Validation Error"
-  );
+    .map((error) => error.msg)
+    .join(" & ");
+  return sendResponse(res, 422, false, null, { message }, "Validation Error");
 };
 
 validators.checkObjectId = (paramId) => {

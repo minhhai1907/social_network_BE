@@ -14,7 +14,10 @@ router.post(
   "/",
   validators.validate([
     body("name", "Invalid name").exists().notEmpty(),
-    body("email", "Invalid email").exists().isEmail(),
+    body("email", "Invalid email")
+      .exists()
+      .isEmail()
+      .normalizeEmail({ gmail_remove_dots: false }),
     body("password", "Invalid password").exists().notEmpty(),
   ]),
   userController.register
@@ -53,6 +56,6 @@ router.get(
  * @description Update user profile
  * @access Login required
  */
-router.put("/", authMiddleware.loginRequired, userController.updateProfile);
+router.put("/:id", authMiddleware.loginRequired, userController.updateProfile);
 
 module.exports = router;

@@ -42,30 +42,30 @@ router.get(
 );
 
 /**
- * @route PUT /friends/requests/:id
+ * @route PUT /friends/requests/:userId
  * @description Accept/Reject a received pending requests
  * @access Login required
  */
 router.put(
-  "/requests/:id",
+  "/requests/:userId",
   authMiddleware.loginRequired,
   validators.validate([
-    param("id").exists().isString().custom(validators.checkObjectId),
+    param("userId").exists().isString().custom(validators.checkObjectId),
     body("status").exists().isString().isIn(["accepted", "declined"]),
   ]),
   friendController.reactFriendRequest
 );
 
 /**
- * @route DELETE /friends/requests/:id
+ * @route DELETE /friends/requests/:userId
  * @description Cancel a friend request
  * @access Login required
  */
 router.delete(
-  "/requests/:id",
+  "/requests/:userId",
   authMiddleware.loginRequired,
   validators.validate([
-    param("id").exists().isString().custom(validators.checkObjectId),
+    param("userId").exists().isString().custom(validators.checkObjectId),
   ]),
   friendController.cancelFriendRequest
 );
@@ -78,15 +78,15 @@ router.delete(
 router.get("/", authMiddleware.loginRequired, friendController.getFriendList);
 
 /**
- * @route DELETE /friends/:id
+ * @route DELETE /friends/:userId
  * @description Remove a friend
  * @access Login required
  */
 router.delete(
-  "/:id",
+  "/:userId",
   authMiddleware.loginRequired,
   validators.validate([
-    param("id").exists().isString().custom(validators.checkObjectId),
+    param("userId").exists().isString().custom(validators.checkObjectId),
   ]),
   friendController.removeFriend
 );

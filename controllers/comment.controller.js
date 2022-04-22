@@ -3,6 +3,10 @@ const Comment = require("../models/Comment");
 const Post = require("../models/Post");
 
 const commentController = {};
+const calculateCommentCount = async (postId) => {
+  const commentCount = await Comment.find({ post: postId }).countDocuments();
+  await Post.findByIdAndUpdate(postId, { commentCount: commentCount });
+};
 
 commentController.createNewComment = catchAsync(async (req, res, next) => {
   const userId = req.userId;
@@ -17,7 +21,8 @@ commentController.createNewComment = catchAsync(async (req, res, next) => {
     post: postId,
     content,
   });
-  comment = await comment.populate("user").execPopulate();
+  await calculateCommentCount(postId);
+  comment = await comment.populate("author");
 
   return sendResponse(
     res,
@@ -72,6 +77,7 @@ commentController.deleteSingleComment = catchAsync(async (req, res, next) => {
       "Comment not found or User not authorized",
       "Delete Comment Error"
     );
+  await calculateCommentCount(comment.post);
 
   return sendResponse(res, 200, true, null, null, "Delete successful");
 });

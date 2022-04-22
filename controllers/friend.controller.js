@@ -3,6 +3,14 @@ const User = require("../models/User");
 const Friend = require("../models/Friend");
 const friendController = {};
 
+const calculateFriendCount = async (userId) => {
+  const friendCount = await Friend.find({
+    $or: [{ from: userId }, { to: userId }],
+    status: "accepted",
+  }).countDocuments();
+  await User.findByIdAndUpdate(userId, { friendCount: friendCount });
+};
+
 friendController.sendFriendRequest = catchAsync(async (req, res, next) => {
   const userId = req.userId; // From
   const toUserId = req.body.to; // To
@@ -18,12 +26,12 @@ friendController.sendFriendRequest = catchAsync(async (req, res, next) => {
     ],
   });
   if (!friend) {
-    await Friend.create({
+    friend = await Friend.create({
       from: userId,
       to: toUserId,
       status: "pending",
     });
-    return sendResponse(res, 200, true, null, null, "Request has ben sent");
+    return sendResponse(res, 200, true, friend, null, "Request has ben sent");
   } else {
     switch (friend.status) {
       case "pending":
@@ -49,7 +57,14 @@ friendController.sendFriendRequest = catchAsync(async (req, res, next) => {
         friend.to = toUserId;
         friend.status = "pending";
         await friend.save();
-        return sendResponse(res, 200, true, null, null, "Request has ben sent");
+        return sendResponse(
+          res,
+          200,
+          true,
+          friend,
+          null,
+          "Request has ben sent"
+        );
 
       default:
         throw new AppError(400, "Friend status undefined", "Add Friend Error");
@@ -59,27 +74,41 @@ friendController.sendFriendRequest = catchAsync(async (req, res, next) => {
 
 friendController.reactFriendRequest = catchAsync(async (req, res, next) => {
   const userId = req.userId; // To
+  const fromUserId = req.params.userId; // From
   const { status } = req.body; // status: accepted | declined
 
-  let friend = await Friend.findById(req.params.id);
+  let friend = await Friend.findOne({
+    from: fromUserId,
+    to: userId,
+    status: "pending",
+  });
   if (!friend)
     throw new AppError(
-      404,
+      400,
       "Friend Request not found",
       "React Friend Request Error"
     );
 
   friend.status = status;
   await friend.save();
+  if (status === "accepted") {
+    await calculateFriendCount(userId);
+    await calculateFriendCount(fromUserId);
+  }
 
-  return sendResponse(res, 200, true, null, null, "Friend request successful");
+  return sendResponse(
+    res,
+    200,
+    true,
+    friend,
+    null,
+    "React Friend Request successfully"
+  );
 });
 
 friendController.getFriendList = catchAsync(async (req, res, next) => {
-  let { page, limit, sortBy, ...filter } = { ...req.query };
+  let { page, limit, ...filter } = { ...req.query };
   const userId = req.userId;
-  page = parseInt(page) || 1;
-  limit = parseInt(limit) || 10;
 
   let friendList = await Friend.find({
     $or: [{ from: userId }, { to: userId }],
@@ -91,36 +120,43 @@ friendController.getFriendList = catchAsync(async (req, res, next) => {
     return friend.from;
   });
 
-  const totalFriends = await User.countDocuments({
-    ...filter,
-    isDeleted: false,
-    _id: { $in: friendIDs },
-  });
-  const totalPages = Math.ceil(totalFriends / limit);
+  page = parseInt(page) || 1;
+  limit = parseInt(limit) || 10;
+  const filterConditions = [{ _id: { $in: friendIDs } }];
+  if (filter.name) {
+    filterConditions.push({
+      ["name"]: { $regex: filter.name, $options: "i" },
+    });
+  }
+  const filterCrireria = filterConditions.length
+    ? { $and: filterConditions }
+    : {};
+
+  const count = await User.countDocuments(filterCrireria);
+  const totalPages = Math.ceil(count / limit);
   const offset = limit * (page - 1);
 
-  let users = await User.find({ ...filter, _id: { $in: friendIDs } })
-    .sort({ ...sortBy, createdAt: -1 })
+  const users = await User.find(filterCrireria)
+    .sort({ createdAt: -1 })
     .skip(offset)
     .limit(limit);
 
-  const promises = users.map(async (user) => {
+  const usersWithFriendship = users.map((user) => {
     let temp = user.toJSON();
-    temp.friend = friendList.find((friend) => {
-      if (friend.from.equals(user._id) || friend.to.equals(user._id)) {
-        return { status: friend.status };
+    temp.friendship = friendList.find((friendship) => {
+      if (friendship.from.equals(user._id) || friendship.to.equals(user._id)) {
+        return { status: friendship.status };
       }
       return false;
     });
     return temp;
   });
-  const usersWithFriends = await Promise.all(promises);
 
   return sendResponse(
     res,
     200,
     true,
-    { users: usersWithFriends, totalPages },
+    { users: usersWithFriendship, totalPages, count },
     null,
     null
   );
@@ -128,51 +164,58 @@ friendController.getFriendList = catchAsync(async (req, res, next) => {
 
 friendController.getSentFriendRequestList = catchAsync(
   async (req, res, next) => {
-    let { page, limit, sortBy, ...filter } = { ...req.query };
+    let { page, limit, ...filter } = { ...req.query };
     const userId = req.userId;
-    page = parseInt(page) || 1;
-    limit = parseInt(limit) || 10;
 
     let requestList = await Friend.find({
       from: userId,
       status: "pending",
     });
-
     const recipientIDs = requestList.map((friend) => {
       if (friend.from._id.equals(userId)) return friend.to;
       return friend.from;
     });
 
-    const totalRequests = await User.countDocuments({
-      ...filter,
-      isDeleted: false,
-      _id: { $in: recipientIDs },
-    });
-    const totalPages = Math.ceil(totalRequests / limit);
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
+    const filterConditions = [{ _id: { $in: recipientIDs } }];
+    if (filter.name) {
+      filterConditions.push({
+        ["name"]: { $regex: filter.name, $options: "i" },
+      });
+    }
+    const filterCrireria = filterConditions.length
+      ? { $and: filterConditions }
+      : {};
+
+    const count = await User.countDocuments(filterCrireria);
+    const totalPages = Math.ceil(count / limit);
     const offset = limit * (page - 1);
 
-    let users = await User.find({ ...filter, _id: { $in: recipientIDs } })
-      .sort({ ...sortBy, createdAt: -1 })
+    const users = await User.find(filterCrireria)
+      .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit);
 
-    const promises = users.map(async (user) => {
+    const usersWithFriendship = users.map((user) => {
       let temp = user.toJSON();
-      temp.friend = requestList.find((friend) => {
-        if (friend.from.equals(user._id) || friend.to.equals(user._id)) {
-          return { status: friend.status };
+      temp.friendship = requestList.find((friendship) => {
+        if (
+          friendship.from.equals(user._id) ||
+          friendship.to.equals(user._id)
+        ) {
+          return { status: friendship.status };
         }
         return false;
       });
       return temp;
     });
-    const usersWithFriends = await Promise.all(promises);
 
     return sendResponse(
       res,
       200,
       true,
-      { users: usersWithFriends, totalPages },
+      { users: usersWithFriendship, totalPages, count },
       null,
       null
     );
@@ -181,51 +224,57 @@ friendController.getSentFriendRequestList = catchAsync(
 
 friendController.getReceivedFriendRequestList = catchAsync(
   async (req, res, next) => {
-    let { page, limit, sortBy, ...filter } = { ...req.query };
+    let { page, limit, ...filter } = { ...req.query };
     const userId = req.userId;
-    page = parseInt(page) || 1;
-    limit = parseInt(limit) || 10;
 
     let requestList = await Friend.find({
       to: userId,
       status: "pending",
     });
-
     const requesterIDs = requestList.map((friend) => {
       if (friend.from._id.equals(userId)) return friend.to;
       return friend.from;
     });
 
-    const totalRequests = await User.countDocuments({
-      ...filter,
-      isDeleted: false,
-      _id: { $in: requesterIDs },
-    });
-    const totalPages = Math.ceil(totalRequests / limit);
+    page = parseInt(page) || 1;
+    limit = parseInt(limit) || 10;
+    const filterConditions = [{ _id: { $in: requesterIDs } }];
+    if (filter.name) {
+      filterConditions.push({
+        ["name"]: { $regex: filter.name, $options: "i" },
+      });
+    }
+    const filterCrireria = filterConditions.length
+      ? { $and: filterConditions }
+      : {};
+
+    const count = await User.countDocuments(filterCrireria);
+    const totalPages = Math.ceil(count / limit);
     const offset = limit * (page - 1);
 
-    let users = await User.find({ ...filter, _id: { $in: requesterIDs } })
-      .sort({ ...sortBy, createdAt: -1 })
+    const users = await User.find(filterCrireria)
+      .sort({ createdAt: -1 })
       .skip(offset)
       .limit(limit);
-
-    const promises = users.map(async (user) => {
+    const usersWithFriendship = users.map((user) => {
       let temp = user.toJSON();
-      temp.friend = requestList.find((friend) => {
-        if (friend.from.equals(user._id) || friend.to.equals(user._id)) {
-          return { status: friend.status };
+      temp.friendship = requestList.find((friendship) => {
+        if (
+          friendship.from.equals(user._id) ||
+          friendship.to.equals(user._id)
+        ) {
+          return { status: friendship.status };
         }
         return false;
       });
       return temp;
     });
-    const usersWithFriends = await Promise.all(promises);
 
     return sendResponse(
       res,
       200,
       true,
-      { users: usersWithFriends, totalPages },
+      { users: usersWithFriendship, totalPages, count },
       null,
       null
     );
@@ -234,19 +283,23 @@ friendController.getReceivedFriendRequestList = catchAsync(
 
 friendController.cancelFriendRequest = catchAsync(async (req, res, next) => {
   const userId = req.userId; // From
-  const toUserId = req.params.id; // To
+  const toUserId = req.params.userId; // To
 
-  const friend = await Friend.findOneAndDelete({
+  const friend = await Friend.findOne({
     from: userId,
     to: toUserId,
     status: "pending",
   });
+  if (!friend)
+    throw new AppError(400, "Friend Request not found", "Cancel Request Error");
+
+  await friend.delete();
 
   return sendResponse(
     res,
     200,
     true,
-    null,
+    friend,
     null,
     "Friend request has been cancelled"
   );
@@ -254,17 +307,22 @@ friendController.cancelFriendRequest = catchAsync(async (req, res, next) => {
 
 friendController.removeFriend = catchAsync(async (req, res, next) => {
   const userId = req.userId;
-  const toBeRemovedUserId = req.params.id;
+  const friendId = req.params.userId;
 
-  const friend = await Friend.findOneAndDelete({
+  const friend = await Friend.findOne({
     $or: [
-      { from: userId, to: toBeRemovedUserId },
-      { from: toBeRemovedUserId, to: userId },
+      { from: userId, to: friendId },
+      { from: friendId, to: userId },
     ],
     status: "accepted",
   });
+  if (!friend)
+    throw new AppError(400, "Friend not found", "Remove Friend Error");
 
-  return sendResponse(res, 200, true, null, null, "Friend has been removed");
+  await friend.delete();
+  await calculateFriendCount(userId);
+
+  return sendResponse(res, 200, true, friend, null, "Friend has been removed");
 });
 
 module.exports = friendController;

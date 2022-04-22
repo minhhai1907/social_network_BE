@@ -2,27 +2,57 @@ const { AppError, catchAsync, sendResponse } = require("../helpers/utils");
 const Post = require("../models/Post");
 const Comment = require("../models/Comment");
 const User = require("../models/User");
+const Friend = require("../models/Friend");
 const postController = {};
 
+const calculatePostCount = async (userId) => {
+  const postCount = await Post.find({ author: userId }).countDocuments();
+  await User.findByIdAndUpdate(userId, { postCount: postCount });
+};
+
 postController.getPosts = catchAsync(async (req, res, next) => {
-  let { page, limit, sortBy, ...filter } = { ...req.query };
+  let { page, limit } = { ...req.query };
+  const userId = req.params.userId;
+
+  const user = await User.findById(userId);
+  if (!user) throw new AppError(404, "User not found", "Get Posts Error");
+
+  let userFriendIDs = await Friend.find({
+    $or: [{ from: userId }, { to: userId }],
+    status: "accepted",
+  });
+  if (userFriendIDs && userFriendIDs.length) {
+    userFriendIDs = userFriendIDs.map((friend) => {
+      if (friend.from._id.equals(userId)) return friend.to;
+      return friend.from;
+    });
+  } else {
+    userFriendIDs = [];
+  }
+  userFriendIDs = [...userFriendIDs, userId];
+  console.log(userFriendIDs);
+
   page = parseInt(page) || 1;
   limit = parseInt(limit) || 10;
+  const filterConditions = [
+    { isDelete: false },
+    { author: { $in: userFriendIDs } },
+  ];
+  const filterCrireria = filterConditions.length
+    ? { $and: filterConditions }
+    : {};
 
-  const totalPosts = await Post.countDocuments({
-    ...filter,
-    isDeleted: false,
-  });
-  const totalPages = Math.ceil(totalPosts / limit);
+  const count = await Post.countDocuments(filterCrireria);
+  const totalPages = Math.ceil(count / limit);
   const offset = limit * (page - 1);
 
-  const posts = await Post.find(filter)
-    .sort({ ...sortBy, createdAt: -1 })
+  const posts = await Post.find(filterCrireria)
+    .sort({ createdAt: -1 })
     .skip(offset)
     .limit(limit)
     .populate("author");
 
-  return sendResponse(res, 200, true, { posts, totalPages }, null, "");
+  return sendResponse(res, 200, true, { posts, totalPages, count }, null, "");
 });
 
 postController.getSinglePost = catchAsync(async (req, res, next) => {
@@ -38,14 +68,15 @@ postController.getSinglePost = catchAsync(async (req, res, next) => {
 
 postController.createNewPost = catchAsync(async (req, res, next) => {
   const author = req.userId;
-  const { title, content, images } = req.body;
+  const { content, image } = req.body;
 
-  const post = await Post.create({
-    title,
+  let post = await Post.create({
     content,
     author,
-    images,
+    image,
   });
+  await calculatePostCount(author);
+  post = await post.populate("author");
 
   return sendResponse(res, 200, true, post, null, "Create new post successful");
 });
@@ -53,11 +84,11 @@ postController.createNewPost = catchAsync(async (req, res, next) => {
 postController.updateSinglePost = catchAsync(async (req, res, next) => {
   const author = req.userId;
   const postId = req.params.id;
-  const { title, content } = req.body;
+  const { content } = req.body;
 
   const post = await Post.findOneAndUpdate(
     { _id: postId, author: author },
-    { title, content },
+    { content },
     { new: true }
   );
 
@@ -80,16 +111,24 @@ postController.getCommentsOfPost = catchAsync(async (req, res, next) => {
   if (!post)
     throw new AppError(404, "Post not found", "Create New Comment Error");
 
-  const totalComments = await Comment.countDocuments({ post: postId });
-  const totalPages = Math.ceil(totalComments / limit);
+  const count = await Comment.countDocuments({ post: postId });
+  const totalPages = Math.ceil(count / limit);
   const offset = limit * (page - 1);
 
   const comments = await Comment.find({ post: postId })
     .sort({ createdAt: -1 })
     .skip(offset)
-    .limit(limit);
+    .limit(limit)
+    .populate("author");
 
-  return sendResponse(res, 200, true, { comments, totalPages }, null, "");
+  return sendResponse(
+    res,
+    200,
+    true,
+    { comments, totalPages, count },
+    null,
+    ""
+  );
 });
 
 postController.deleteSinglePost = catchAsync(async (req, res, next) => {
@@ -108,6 +147,8 @@ postController.deleteSinglePost = catchAsync(async (req, res, next) => {
       "Post not found or User not authorized",
       "Delete Post Error"
     );
+
+  await calculatePostCount(author);
 
   return sendResponse(res, 200, true, null, null, "Delete Post successful");
 });

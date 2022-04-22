@@ -13,19 +13,22 @@ const { body, param } = require("express-validator");
 router.post(
   "/",
   authMiddleware.loginRequired,
-  validators.validate([
-    body("title", "Missing title").exists().notEmpty(),
-    body("content", "Missing content").exists().notEmpty(),
-  ]),
+  validators.validate([body("content", "Missing content").exists().notEmpty()]),
   postController.createNewPost
 );
 
 /**
- * @route GET /posts?page=1&limit=10
+ * @route GET /posts/user/:userId?page=1&limit=10
  * @description Get all posts an user can see with pagination
  * @access Login required
  */
-router.get("/", postController.getPosts);
+router.get(
+  "/user/:userId",
+  validators.validate([
+    param("userId").exists().isString().custom(validators.checkObjectId),
+  ]),
+  postController.getPosts
+);
 
 /**
  * @route GET /posts/:id
