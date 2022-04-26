@@ -72,7 +72,7 @@ userController.getUsers = catchAsync(async (req, res, next) => {
 
   page = parseInt(page) || 1;
   limit = parseInt(limit) || 10;
-  const filterConditions = [{ isDelete: false }];
+  const filterConditions = [{ isDeleted: false }];
   if (filter.name) {
     filterConditions.push({
       ["name"]: { $regex: filter.name, $options: "i" },

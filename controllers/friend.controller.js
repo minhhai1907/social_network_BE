@@ -4,10 +4,10 @@ const Friend = require("../models/Friend");
 const friendController = {};
 
 const calculateFriendCount = async (userId) => {
-  const friendCount = await Friend.find({
+  const friendCount = await Friend.countDocuments({
     $or: [{ from: userId }, { to: userId }],
     status: "accepted",
-  }).countDocuments();
+  });
   await User.findByIdAndUpdate(userId, { friendCount: friendCount });
 };
 

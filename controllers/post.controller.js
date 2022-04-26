@@ -6,7 +6,10 @@ const Friend = require("../models/Friend");
 const postController = {};
 
 const calculatePostCount = async (userId) => {
-  const postCount = await Post.find({ author: userId }).countDocuments();
+  const postCount = await Post.countDocuments({
+    author: userId,
+    isDeleted: false,
+  });
   await User.findByIdAndUpdate(userId, { postCount: postCount });
 };
 
@@ -35,7 +38,7 @@ postController.getPosts = catchAsync(async (req, res, next) => {
   page = parseInt(page) || 1;
   limit = parseInt(limit) || 10;
   const filterConditions = [
-    { isDelete: false },
+    { isDeleted: false },
     { author: { $in: userFriendIDs } },
   ];
   const filterCrireria = filterConditions.length
@@ -149,7 +152,7 @@ postController.deleteSinglePost = catchAsync(async (req, res, next) => {
 
   await calculatePostCount(author);
 
-  return sendResponse(res, 200, true, null, null, "Delete Post successful");
+  return sendResponse(res, 200, true, post, null, "Delete Post successful");
 });
 
 module.exports = postController;

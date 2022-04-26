@@ -4,7 +4,7 @@ const Post = require("../models/Post");
 
 const commentController = {};
 const calculateCommentCount = async (postId) => {
-  const commentCount = await Comment.find({ post: postId }).countDocuments();
+  const commentCount = await Comment.countDocuments({ post: postId });
   await Post.findByIdAndUpdate(postId, { commentCount: commentCount });
 };
 
@@ -79,7 +79,7 @@ commentController.deleteSingleComment = catchAsync(async (req, res, next) => {
     );
   await calculateCommentCount(comment.post);
 
-  return sendResponse(res, 200, true, null, null, "Delete successful");
+  return sendResponse(res, 200, true, comment, null, "Delete successful");
 });
 
 module.exports = commentController;
