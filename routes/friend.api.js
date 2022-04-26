@@ -36,7 +36,7 @@ router.get(
  * @access Login required
  */
 router.get(
-  "/request/outgoing",
+  "/requests/outgoing",
   authMiddleware.loginRequired,
   friendController.getSentFriendRequestList
 );

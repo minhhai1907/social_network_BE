@@ -84,21 +84,20 @@ postController.createNewPost = catchAsync(async (req, res, next) => {
 postController.updateSinglePost = catchAsync(async (req, res, next) => {
   const author = req.userId;
   const postId = req.params.id;
-  const { content } = req.body;
 
-  const post = await Post.findOneAndUpdate(
-    { _id: postId, author: author },
-    { content },
-    { new: true }
-  );
+  const post = await Post.findById(postId);
+  if (!post) throw new AppError(404, "Post not found", "Update Post Error");
+  if (!post.author.equals(author))
+    throw new AppError(400, "Only author can edit post", "Update Post Error");
 
-  if (!post)
-    throw new AppError(
-      400,
-      "Post not found or User not authorized",
-      "Update Post Error"
-    );
+  const allows = ["content", "image"];
+  allows.forEach((field) => {
+    if (req.body[field] !== undefined) {
+      post[field] = req.body[field];
+    }
+  });
 
+  await post.save();
   return sendResponse(res, 200, true, post, null, "Update Post successful");
 });
 

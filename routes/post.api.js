@@ -54,7 +54,6 @@ router.put(
   authMiddleware.loginRequired,
   validators.validate([
     param("id").exists().isString().custom(validators.checkObjectId),
-    body("title", "Missing title").exists().notEmpty(),
     body("content", "Missing content").exists().notEmpty(),
   ]),
   postController.updateSinglePost
