@@ -1,14 +1,12 @@
 const express = require("express");
 require("dotenv").config();
-// const bodyParser = require('body-parser')
 const path = require("path");
 const cookieParser = require("cookie-parser");
 const logger = require("morgan");
 const cors = require("cors");
 const { sendResponse } = require("./helpers/utils");
-
+const MONGO_URI=process.env.MONGO_DB
 const mongoose = require("mongoose");
-// const mongoURI = process.env.MONGODB_DB;
 
 const indexRouter = require("./routes/index");
 
@@ -16,10 +14,6 @@ const app = express();
 
 app.use(logger("dev"));
 app.use(express.json());
-// app.use(bodyParser.json());
-
-// //support parsing of application/x-www-form-urlencoded post data
-// app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(cors());
@@ -27,7 +21,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 /* DB Connection */
 mongoose
-  .connect("mongodb://localhost/codercomm")
+  .connect(MONGO_URI)
   .then(() => console.log(`DB connected`))
   .catch((err) => console.log(err));
 

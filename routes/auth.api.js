@@ -21,16 +21,6 @@ router.post(
   authController.loginWithEmail
 );
 
-/**
- * @route POST /auth/login/facebook
- * @description Login with facebook
- * @access Public
- */
 
-/**
- * @route POST /auth/login/google
- * @description Login with google
- * @access Public
- */
 
 module.exports = router;

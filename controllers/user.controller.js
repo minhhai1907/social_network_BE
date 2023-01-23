@@ -127,16 +127,6 @@ userController.getSingleUser = catchAsync(async (req, res, next) => {
       { from: user._id, to: currentUserId },
     ],
   });
-  // user.friends = await Friend.find(
-  //   {
-  //     $or: [
-  //       { from: userId, status: "accepted" },
-  //       { to: userId, status: "accepted" },
-  //     ],
-  //   },
-  //   "-_id status message updatedAt"
-  // );
-
   return sendResponse(res, 200, true, user, null, "");
 });
 
