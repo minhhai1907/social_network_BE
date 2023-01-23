@@ -78,15 +78,15 @@ userController.getUsers = catchAsync(async (req, res, next) => {
       ["name"]: { $regex: filter.name, $options: "i" },
     });
   }
-  const filterCrireria = filterConditions.length
+  const filterCriteria = filterConditions.length
     ? { $and: filterConditions }
     : {};
 
-  const count = await User.countDocuments(filterCrireria);
+  const count = await User.countDocuments(filterCriteria);
   const totalPages = Math.ceil(count / limit);
   const offset = limit * (page - 1);
 
-  let users = await User.find(filterCrireria)
+  let users = await User.find(filterCriteria)
     .sort({ createdAt: -1 })
     .skip(offset)
     .limit(limit);
@@ -151,7 +151,7 @@ userController.getCurrentUser = catchAsync(async (req, res, next) => {
     res,
     200,
     true,
-    user,
+    {user},
     null,
     "Get current user successful"
   );

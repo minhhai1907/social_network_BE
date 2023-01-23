@@ -14,6 +14,7 @@ const calculateFriendCount = async (userId) => {
 friendController.sendFriendRequest = catchAsync(async (req, res, next) => {
   const userId = req.userId; // From
   const toUserId = req.body.to; // To
+  console.log("toUserId",toUserId)
 
   const user = await User.findById(toUserId);
   if (!user)

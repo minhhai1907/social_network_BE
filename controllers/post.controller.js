@@ -14,16 +14,17 @@ const calculatePostCount = async (userId) => {
 };
 
 postController.getPosts = catchAsync(async (req, res, next) => {
-  let { page, limit } = { ...req.query };
+  let { page, limit } ={...req.query };
   const userId = req.params.userId;
 
   const user = await User.findById(userId);
   if (!user) throw new AppError(404, "User not found", "Get Posts Error");
-
+ 
   let userFriendIDs = await Friend.find({
     $or: [{ from: userId }, { to: userId }],
     status: "accepted",
   });
+  //tra ve danh sach userFriendIDs chua cac id cua friend
   if (userFriendIDs && userFriendIDs.length) {
     userFriendIDs = userFriendIDs.map((friend) => {
       if (friend.from._id.equals(userId)) return friend.to;
@@ -33,7 +34,7 @@ postController.getPosts = catchAsync(async (req, res, next) => {
     userFriendIDs = [];
   }
   userFriendIDs = [...userFriendIDs, userId];
-  console.log(userFriendIDs);
+  // console.log(userFriendIDs);
 
   page = parseInt(page) || 1;
   limit = parseInt(limit) || 10;
@@ -41,15 +42,15 @@ postController.getPosts = catchAsync(async (req, res, next) => {
     { isDeleted: false },
     { author: { $in: userFriendIDs } },
   ];
-  const filterCrireria = filterConditions.length
+  const filterCriteria = filterConditions.length
     ? { $and: filterConditions }
     : {};
 
-  const count = await Post.countDocuments(filterCrireria);
+  const count = await Post.countDocuments(filterCriteria);
   const totalPages = Math.ceil(count / limit);
   const offset = limit * (page - 1);
 
-  const posts = await Post.find(filterCrireria)
+  const posts = await Post.find(filterCriteria)
     .sort({ createdAt: -1 })
     .skip(offset)
     .limit(limit)
